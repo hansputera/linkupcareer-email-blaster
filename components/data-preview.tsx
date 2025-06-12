@@ -10,18 +10,54 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface DataPreviewProps {
   data: any[]
+  onFileUpload?: (file: File) => void
 }
 
-export function DataPreview({ data }: DataPreviewProps) {
+export function DataPreview({ data, onFileUpload }: DataPreviewProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileError, setFileError] = useState<string>("")
   const itemsPerPage = 5
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Only accept Excel files
+      if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls') && !file.name.endsWith('.csv')) {
+        setFileError("Unsupported file type. Please upload an Excel or CSV file.")
+        setSelectedFile(null)
+        return
+      }
+      setFileError("")
+      setSelectedFile(file)
+      if (onFileUpload) onFileUpload(file)
+      // Otherwise, file parsing logic can be added here
+    }
+  }
 
   if (!data || data.length === 0) {
     return (
       <div className="text-center py-12 border rounded-md bg-muted/20">
         <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <p className="text-muted-foreground">No data available. Please upload an Excel file.</p>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <Input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleFileChange}
+            className="max-w-xs"
+          />
+          {selectedFile && (
+            <span className="text-sm text-muted-foreground">Selected: {selectedFile.name}</span>
+          )}
+          {fileError && (
+            <Alert variant="destructive" className="max-w-xs mt-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{fileError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
       </div>
     )
   }
@@ -38,6 +74,24 @@ export function DataPreview({ data }: DataPreviewProps) {
 
   return (
     <div className="space-y-6">
+      {/* File attachment UI above table (optional) */}
+      <div className="flex items-center gap-4 pb-2">
+        <Input
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          onChange={handleFileChange}
+          className="max-w-xs"
+        />
+        {selectedFile && (
+          <span className="text-sm text-muted-foreground">Selected: {selectedFile.name}</span>
+        )}
+        {fileError && (
+          <Alert variant="destructive" className="max-w-xs">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{fileError}</AlertDescription>
+          </Alert>
+        )}
+      </div>
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">

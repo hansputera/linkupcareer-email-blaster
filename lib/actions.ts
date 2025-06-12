@@ -8,8 +8,15 @@ interface EmailObject {
   message: string
 }
 
+interface AttachmentObject {
+  filename: string
+  content: Buffer | string
+  contentType?: string
+}
+
 interface SendEmailBlastParams {
   emails: EmailObject[]
+  attachments?: AttachmentObject[]
 }
 
 interface EmailBlastResult {
@@ -18,11 +25,7 @@ interface EmailBlastResult {
   errors?: string[]
 }
 
-export async function sendEmailBlast({ emails }: SendEmailBlastParams): Promise<EmailBlastResult> {
-  // This is a simulated email sending function
-  // In a real application, you would integrate with an email service provider
-
-  // Validate email format
+export async function sendEmailBlast({ emails, attachments }: SendEmailBlastParams): Promise<EmailBlastResult> {
   const validEmails = emails.filter((email) => {
     return email.to && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.to)
   });
@@ -31,6 +34,7 @@ export async function sendEmailBlast({ emails }: SendEmailBlastParams): Promise<
     to: m.to,
     subject: m.subject,
     text: m.message,
+    attachments: attachments && attachments.length > 0 ? attachments : undefined,
   }).catch(() => undefined)));
 
   return {

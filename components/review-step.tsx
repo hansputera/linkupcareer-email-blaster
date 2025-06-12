@@ -18,11 +18,27 @@ interface ReviewStepProps {
 }
 
 export function ReviewStep({ emailsToSend, template, subject, recipientCount, onBack, onReset }: ReviewStepProps) {
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [isSent, setIsSent] = useState(false)
   const [sentCount, setSentCount] = useState(0)
   const { toast } = useToast()
+
+  // Helper: Read a File as base64 string
+  function readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data:...;base64, prefix
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 
   const handleSendEmails = async () => {
     if (emailsToSend.length === 0) {
@@ -50,7 +66,22 @@ export function ReviewStep({ emailsToSend, template, subject, recipientCount, on
         })
       }, 100)
 
-      const result = await sendEmailBlast({ emails: emailsToSend })
+      // Convert File[] to AttachmentObject[] (base64)
+      let attachmentObjects: {
+        filename: string;
+        content: string;
+        contentType: string;
+      }[] = [];
+      if (attachments && attachments.length > 0) {
+        attachmentObjects = await Promise.all(
+          attachments.map(async (file) => ({
+            filename: file.name,
+            content: await readFileAsBase64(file),
+            contentType: file.type,
+          }))
+        );
+      }
+      const result = await sendEmailBlast({ emails: emailsToSend, attachments: attachmentObjects })
 
       clearInterval(progressInterval)
       setProgress(100)
@@ -73,14 +104,51 @@ export function ReviewStep({ emailsToSend, template, subject, recipientCount, on
   }
 
   return (
-    <>
+    <div>
       <CardHeader>
         <CardTitle>Review & Send</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {!isSent ? (
-            <>
+      {isSent ? (
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="bg-green-100 dark:bg-green-900/20 p-4 rounded-full mb-4">
+              <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-500" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Campaign Sent Successfully!</h2>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              Your email campaign has been sent to {sentCount} recipients. They should receive it shortly.
+            </p>
+            <Button onClick={onReset} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Create New Campaign
+            </Button>
+          </div>
+        </CardContent>
+      ) : (
+        <>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Attachment picker */}
+              <div>
+                <label className="block font-medium mb-1">Attachments (optional):</label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={e => {
+                    if (e.target.files) {
+                      setAttachments(Array.from(e.target.files));
+                    }
+                  }}
+                  className="block border rounded px-2 py-1"
+                />
+                {attachments.length > 0 && (
+                  <ul className="mt-2 text-sm text-muted-foreground">
+                    {attachments.map((file, idx) => (
+                      <li key={idx}>{file.name} ({Math.round(file.size/1024)} KB)</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-4">
                   <div className="border rounded-md overflow-hidden">
@@ -109,7 +177,6 @@ export function ReviewStep({ emailsToSend, template, subject, recipientCount, on
                     </div>
                   </div>
                 </div>
-
                 <div className="border rounded-md overflow-hidden">
                   <div className="bg-muted/30 p-3 border-b">
                     <div className="text-sm font-medium">Ready to Send</div>
@@ -138,44 +205,26 @@ export function ReviewStep({ emailsToSend, template, subject, recipientCount, on
                   </div>
                 </div>
               </div>
-
               {isLoading && (
                 <div className="space-y-2">
                   <Progress value={progress} className="h-2" />
                   <p className="text-xs text-center text-muted-foreground">Sending emails... {Math.round(progress)}%</p>
                 </div>
               )}
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <div className="bg-green-100 dark:bg-green-900/20 p-4 rounded-full mb-4">
-                <CheckCircle className="h-12 w-12 text-green-600 dark:text-green-500" />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Campaign Sent Successfully!</h2>
-              <p className="text-muted-foreground mb-6 max-w-md">
-                Your email campaign has been sent to {sentCount} recipients. They should receive it shortly.
-              </p>
-              <Button onClick={onReset} className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Create New Campaign
-              </Button>
             </div>
-          )}
-        </div>
-      </CardContent>
-      <CardFooter className="flex justify-between border-t p-6">
-        {!isSent ? (
-          <>
-            <Button variant="outline" onClick={onBack} className="gap-2" disabled={isLoading}>
-              <ArrowLeft className="h-4 w-4" />
+          </CardContent>
+          <CardFooter className="flex justify-between items-center gap-4">
+            <Button variant="outline" onClick={onBack} disabled={isLoading}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <div></div>
-          </>
-        ) : (
-          <div></div>
-        )}
-      </CardFooter>
-    </>
+            <Button onClick={handleSendEmails} disabled={isLoading || isSent}>
+              {isLoading ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+              {isSent ? "Sent!" : "Send Emails"}
+            </Button>
+          </CardFooter>
+        </>
+      )}
+    </div>
   )
 }
